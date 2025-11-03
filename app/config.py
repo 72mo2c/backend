@@ -1,40 +1,80 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
+import secrets
 import os
 
 
 class Settings(BaseSettings):
-    # Database - متوفر من متغيرات البيئة في Render
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./saas_db.db")
+    # Database
+    database_url: str = "postgresql://postgres:password@localhost:5432/saas_db"
     
-    # Security - مطلوب تحديث في الإنتاج
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "development-secret-key-change-in-production")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
-    ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+    # Security
+    secret_key: str = secrets.token_urlsafe(32)
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 30
+    algorithm: str = "HS256"
     
-    # Redis (اختياري لـ Render)
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    # Redis (Optional for Railway)
+    redis_url: Optional[str] = None
     
     # Email (للتطوير المستقبلي)
-    SMTP_HOST: Optional[str] = os.getenv("SMTP_HOST")
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USERNAME: Optional[str] = os.getenv("SMTP_USERNAME")
-    SMTP_PASSWORD: Optional[str] = os.getenv("SMTP_PASSWORD")
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
     
-    # Environment - Production على Render
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+    # Environment
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    debug: bool = os.getenv("DEBUG", "false").lower() == "true"
     
-    # CORS - مقيد للإنتاج
-    ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+    # CORS
+    allowed_origins: List[str] = ["*"]
     
-    # Render-specific
-    PORT: int = int(os.getenv("PORT", "8000"))
+    # API Configuration
+    api_v1_str: str = "/api"
+    
+    # Railway specific settings
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() == "production"
+    
+    @property
+    def is_development(self) -> bool:
+        return self.environment.lower() == "development"
+    
+    def get_database_url(self) -> str:
+        """Parse Railway's DATABASE_URL if available"""
+        if os.getenv("DATABASE_URL"):
+            return os.getenv("DATABASE_URL")
+        
+        # Fallback to local database
+        return self.database_url
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        # Set default allowed origins based on environment
+        if self.is_production:
+            self.allowed_origins = [
+                "https://your-domain.com",
+                "https://www.your-domain.com",
+                # Add your production domains here
+            ]
+        else:
+            self.allowed_origins = [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://localhost:8080",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:8080"
+            ]
     
     class Config:
         env_file = ".env"
         case_sensitive = False
+        env_file_encoding = "utf-8"
 
 
+# Create settings instance
 settings = Settings()
